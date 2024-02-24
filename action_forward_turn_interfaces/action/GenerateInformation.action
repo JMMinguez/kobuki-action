@@ -1,0 +1,10 @@
+int32 command # 0 para avanzar, 1 para girar
+float32 value
+
+---
+float32 distance_moved
+float32 time_taken
+
+---
+float32 current_distance
+float32 remaining_distance
