@@ -12,37 +12,43 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef ACTION_FORWARD_TURN__ACTIONCLIENTTURN_HPP_
-#define ACTION_FORWARD_TURN__ACTIONCLIENTTURN_HPP_
+#ifndef ACTION_FORWARD_TURN__ACTION_CLIENT_HPP_
+#define ACTION_FORWARD_TURN__ACTION_CLIENT_HPP_
+
+#include "action_forward_turn_interfaces/action/generate_information.hpp"
 
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 
-#include "action_forward_turn_interfaces/action/generate_information.hpp"
-
 namespace action_forward_turn
 {
-
-using std::placeholders::_1;
-using std::placeholders::_2;
 
 class ActionClientTurn : public rclcpp::Node
 {
 public:
   using GenerateInformation = action_forward_turn_interfaces::action::GenerateInformation;
   using GoalHandleGenerateInformation = rclcpp_action::ClientGoalHandle<GenerateInformation>;
+
   ActionClientTurn();
-  void send_turn_request(GenerateInformation::Goal goal);
-  float radians;
+
+  void send_request(GenerateInformation::Goal goal);
+
+  bool is_action_finished() {return finished_;}
+  bool is_result_success() {return success_;}
+
+protected:
+  virtual void goal_response_callback(const GoalHandleGenerateInformation::SharedPtr & goal_handle);
+  virtual void feedback_callback(
+    GoalHandleGenerateInformation::SharedPtr,
+    const std::shared_ptr<const GenerateInformation::Feedback> feedback);
+  virtual void result_callback(const GoalHandleGenerateInformation::WrappedResult & result);
 
 private:
-  void goal_response_callback(const GoalHandleGenerateInformation::SharedPtr & goal_handle);
-  void feedback_callback(
-  GoalHandleGenerateInformation::SharedPtr,
-  const std::shared_ptr<const GenerateInformation::Feedback> feedback);
   rclcpp_action::Client<GenerateInformation>::SharedPtr action_client_;
+  bool finished_ {false};
+  bool success_ {false};
 };
 
-}  //  action_forward_turn
+}  // namespace action_forward_turn
 
-#endif  // ACTION_FORWARD_TURN__ACTIONCLIENTTURN_HPP_
+#endif  // ACTION_FORWARD_TURN__ACTION_CLIENT_HPP_

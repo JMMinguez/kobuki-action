@@ -12,34 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "rclcpp/rclcpp.hpp"
-#include "rclcpp_action/rclcpp_action.hpp"
-
 #include "action_forward_turn/ActionClientTurn.hpp"
 
 namespace action_forward_turn
 {
+
+using std::placeholders::_1;
+using std::placeholders::_2;
+
 ActionClientTurn::ActionClientTurn()
-: Node("action_turn_node")
+: Node("action_forward_turn_action_client")
 {
-
-action_client_ = rclcpp_action::create_client<GenerateInformation>(
-this, "navigate_to_pose");
-
+  action_client_ = rclcpp_action::create_client<GenerateInformation>(
+    this, "generate_information");
 }
 
 void
-ActionClientTurn::send_turn_request(GenerateInformation::Goal goal)
+ActionClientTurn::send_request(GenerateInformation::Goal goal)
 {
-  goal.command = 1;
-  goal.value = radians;
+  finished_ = false;
+  success_ = false;
 
-  auto send_goal_options = rclcpp_action::Client<GenerateInformation>::SendGoalOptions();
+  if (!action_client_->wait_for_action_server()) {
+    RCLCPP_ERROR(this->get_logger(), "Action server not available after waiting");
+    rclcpp::shutdown();
+  }
+
+  auto send_goal_options =
+    rclcpp_action::Client<GenerateInformation>::SendGoalOptions();
 
   send_goal_options.goal_response_callback =
-  std::bind(&ActionClientTurn::goal_response_callback, this, _1);
+    std::bind(&ActionClientTurn::goal_response_callback, this, _1);
   send_goal_options.feedback_callback =
-  std::bind(&ActionClientTurn::feedback_callback, this, _1, _2);
+    std::bind(&ActionClientTurn::feedback_callback, this, _1, _2);
+  send_goal_options.result_callback =
+    std::bind(&ActionClientTurn::result_callback, this, _1);
 
   action_client_->async_send_goal(goal, send_goal_options);
 }
@@ -56,11 +63,33 @@ ActionClientTurn::goal_response_callback(const GoalHandleGenerateInformation::Sh
 
 void
 ActionClientTurn::feedback_callback(
-GoalHandleGenerateInformation::SharedPtr,
-const std::shared_ptr<const GenerateInformation::Feedback> feedback)
+  GoalHandleGenerateInformation::SharedPtr,
+  const std::shared_ptr<const GenerateInformation::Feedback> feedback)
 {
   RCLCPP_INFO(
-    get_logger(), "Feedback received: radians turned = %f, remaining radians = %f", feedback->current_distance, feedback->remaining_distance);
+    get_logger(), "Feedback received: distance to goal = %f", feedback->distance_remaining);
+}
+
+void
+ActionClientTurn::result_callback(const GoalHandleGenerateInformation::WrappedResult & result)
+{
+  switch (result.code) {
+    case rclcpp_action::ResultCode::SUCCEEDED:
+      RCLCPP_INFO(get_logger(), "Goal achieved!!");
+      break;
+    case rclcpp_action::ResultCode::ABORTED:
+      RCLCPP_ERROR(get_logger(), "Goal was aborted");
+      return;
+    case rclcpp_action::ResultCode::CANCELED:
+      RCLCPP_ERROR(get_logger(), "Goal was canceled");
+      return;
+    default:
+      RCLCPP_ERROR(get_logger(), "Unknown result code");
+      return;
+  }
+
+  finished_ = true;
+  success_ = result.code == rclcpp_action::ResultCode::SUCCEEDED;
 }
 
 }  // namespace action_forward_turn

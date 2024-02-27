@@ -26,6 +26,8 @@
 
 #include "action_forward_turn_interfaces/action/generate_information.hpp"
 
+#include "action_forward_turn/ActionServer.hpp"
+
 namespace action_forward_turn
 {
 
@@ -33,28 +35,26 @@ using namespace std::chrono_literals;
 using std::placeholders::_1;
 using std::placeholders::_2;
 
+
 ActionServer::ActionServer()
-: Node("action_server_node"),
+: Node("action_forward_turn_action_server"),
   tf_buffer_(),
-  tf_listener_(tf_buffer_),
-  is_moving(true)
+  tf_listener_(tf_buffer_)
 {
+  action_server_ = rclcpp_action::create_server<GenerateInformation>(
+    this, "generate_information",
+    std::bind(&ActionServer::handle_goal, this, _1, _2),
+    std::bind(&ActionServer::handle_cancel, this, _1),
+    std::bind(&ActionServer::handle_accepted, this, _1));
+  
   timer_pos_check_ = create_wall_timer(
     50ms, std::bind(&ActionServer::transform_callback, this));
-  
   vel_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
 }
 
 void
 ActionServer::start_server()
 {
-  action_server_ = rclcpp_action::create_server<GenerateInformation>(
-    shared_from_this(),
-    "tu_accion",
-    std::bind(&ActionServer::handle_goal, this, _1, _2),
-    std::bind(&ActionServer::handle_cancel, this, _1),
-    std::bind(&ActionServer::handle_accepted, this, _1));
-
   RCLCPP_INFO(get_logger(), "Action Server Ready.");
 }
 
@@ -63,13 +63,8 @@ ActionServer::handle_goal(
   const rclcpp_action::GoalUUID & uuid,
   std::shared_ptr<const GenerateInformation::Goal> goal)
 {
-  (void)uuid;
-
-  if (goal->command == 0) {
-    go_state(FORWARD);
-  } else if (goal->command == 1) {
-    go_state(TURN);
-  }
+  start_ = true;
+  RCLCPP_INFO(get_logger(), "Received goal with command %d and distance %f", goal->command, goal->distance);
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
@@ -77,22 +72,15 @@ rclcpp_action::CancelResponse
 ActionServer::handle_cancel(
   const std::shared_ptr<GoalHandleGenerateInformation> goal_handle)
 {
-  (void)goal_handle;
   RCLCPP_INFO(this->get_logger(), "Received request to cancel goal");
-
-  timer_ = nullptr;
-
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
 void
-ActionServer::handle_accepted(std::shared_ptr<GoalHandleGenerateInformation> goal_handle)
+ActionServer::handle_accepted(const std::shared_ptr<GoalHandleGenerateInformation> goal_handle)
 {
-  
+  RCLCPP_INFO(get_logger(), "Goal accepted by server");
   goal_handle_ = goal_handle;
-  current_times_ = 0;
-  timer_ = create_wall_timer(
-    1s, std::bind(&ActionServer::execute, this));
 }
 
 void
@@ -101,8 +89,23 @@ ActionServer::execute()
   if (current_times_ < 10 && !goal_handle_->is_canceling()) {
     auto feedback = std::make_shared<GenerateInformation::Feedback>();
 
-    feedback->current_distance = current_times_;
-    feedback->remaining_distance = 10.0 - current_times_;
+    double remaining_distance = goal_handle_->get_goal()->distance - actual_distance_;
+
+    if (remaining_distance <= 0){
+      m_vel_.linear.x = 0;
+      m_vel_.angular.z = 0;
+      vel_->publish(m_vel_);
+    } else {
+      if (goal_handle_->get_goal()->command == 0) { // Si el comando es 0, el robot se mueve hacia adelante
+        m_vel_.linear.x = 0.3;
+
+      } else if (goal_handle_->get_goal()->command == 1) { // Si el comando es 1, el robot gira
+        m_vel_.angular.z = 0.3;
+      }
+      vel_->publish(m_vel_);
+    }
+
+    feedback->distance_remaining = 10.0 - current_times_;
     goal_handle_->publish_feedback(feedback);
   } else {
     auto result = std::make_shared<GenerateInformation::Result>();
@@ -113,7 +116,7 @@ ActionServer::execute()
       RCLCPP_INFO(get_logger(), "Action Canceled");
     } else if (current_times_ >= 10) {
       goal_handle_->succeed(result);
-      RCLCPP_INFO(get_logger(), "Action Succeeded");
+      RCLCPP_INFO(get_logger(), "Navigation Succeeded");
     }
 
     timer_ = nullptr;
@@ -147,62 +150,28 @@ ActionServer::transform_callback()
     // Gets the tf from start 'base_footprint' and actual 'base_footprint'
     tf2::Transform bf2bfa = odom2bf_inverse * odom2bfa;
 
-    std::cerr << "BF: \t" << odom2bf_.getOrigin().x() << " " << odom2bf_.getOrigin().y() <<
-      std::endl;
-    std::cerr << "BFa: \t" << odom2bfa.getOrigin().x() << " " << odom2bfa.getOrigin().y() <<
-      std::endl;
-    std::cerr << "TF: \t" << bf2bfa.getOrigin().x() << " " << bf2bfa.getOrigin().y() << std::endl;
+    //std::cerr << "BF: \t" << odom2bf_.getOrigin().x() << " " << odom2bf_.getOrigin().y() <<
+      //std::endl;
+    //std::cerr << "BFa: \t" << odom2bfa.getOrigin().x() << " " << odom2bfa.getOrigin().y() <<
+      //std::endl;
+    //std::cerr << "TF: \t" << bf2bfa.getOrigin().x() << " " << bf2bfa.getOrigin().y() << std::endl;
 
     //  Extracts the x and y coordinates from the obtained transformation.
     double x = bf2bfa.getOrigin().x();
     double y = bf2bfa.getOrigin().y();
 
-    //  Calculate the distance between (0,0) and (x,y)
-    actual_distance_ = sqrt(x * x + y * y);
+    if (goal_handle_->get_goal()->command == 0) { // Si el comando es 0, el robot se mueve hacia adelante
+        //  Calculate the distance between (0,0) and (x,y)
+        actual_distance_ = sqrt(x * x + y * y);
+
+      } else if (goal_handle_->get_goal()->command == 1) { // Si el comando es 1, el robot gira
+        //  Calculate the angle between (0,0) and (x,y)
+        tf2::Matrix3x3 mat(bf2bfa.getRotation());
+        mat.getRPY(roll_, pitch_, yaw_);
+        actual_distance_ = yaw_;
+      }
+  
   }
 }
 
-void
-ActionServer::move_forward()
-{
-  //  FSM
-  switch (state_) {
-    case FORWARD:
-      RCLCPP_INFO(get_logger(), "Moving forward!");
-      l_vel_.linear.x = MOVE_SPEED;
-      vel_->publish(l_vel_);
-      is_moving = true;
-
-      if (check_distance()) {
-        go_state(TURN);
-      }
-      break;
-
-    case TURN:
-      RCLCPP_INFO(get_logger(), "STOP!");
-      l_vel_.linear.x = STOP_SPEED;
-      vel_->publish(l_vel_);
-      is_moving = false;
-
-      if (!check_distance()) {
-        go_state(FORWARD);
-      }
-      break;
-  }
-}
-
-void
-ActionServer::go_state(int new_state)
-{
-  //  Change state
-  state_ = new_state;
-}
-
-bool
-ActionServer::check_distance()
-{
-  //  Check distance
-  return actual_distance_ >= distance;
-}
-
-}  // namespace comms
+}  // namespace action_forward_turn
