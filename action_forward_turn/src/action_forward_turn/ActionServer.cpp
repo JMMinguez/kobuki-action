@@ -90,7 +90,6 @@ ActionServer::handle_accepted(const std::shared_ptr<GoalHandleGenerateInformatio
 void
 ActionServer::execute()
 {
-  // RCLCPP_INFO(get_logger(), "EXECUTE");
 
   if (!goal_handle_->is_canceling()) {
     auto feedback = std::make_shared<GenerateInformation::Feedback>();
@@ -98,8 +97,6 @@ ActionServer::execute()
     transform_callback();
 
     remaining_distance = goal_handle_->get_goal()->distance - actual_distance_;
-    // std::cerr << "Distnace: \t" << goal_handle_->get_goal()->distance << std::endl;
-    // std::cerr << "RD: \t" << remaining_distance << std::endl;
 
     if (!start_time_initialized_) {
       start_time_ = std::chrono::steady_clock::now();
@@ -126,14 +123,15 @@ ActionServer::execute()
       feedback->distance_remaining = remaining_distance;
       goal_handle_->publish_feedback(feedback);
 
-      if (goal_handle_->get_goal()->command == 0) { // Si el comando es 0, el robot se mueve hacia adelante
+      if (goal_handle_->get_goal()->command == 0) {
         m_vel_.linear.x = 0.3;
         m_vel_.angular.z = 0;
 
-      } else if (goal_handle_->get_goal()->command == 1) { // Si el comando es 1, el robot gira
+      } else if (goal_handle_->get_goal()->command == 1) {
         m_vel_.linear.x = 0;
         m_vel_.angular.z = 0.3;
       }
+
       vel_->publish(m_vel_);
     }
 
@@ -142,8 +140,8 @@ ActionServer::execute()
 
     if (goal_handle_->is_canceling()) {
       goal_handle_->canceled(result);
-
       RCLCPP_INFO(get_logger(), "Action Canceled");
+
     } else if (remaining_distance <= 0) {
       goal_handle_->succeed(result);
       RCLCPP_INFO(get_logger(), "Navigation Succeeded");
@@ -166,10 +164,10 @@ ActionServer::transform_callback()
         "odom", "base_footprint", tf2::TimePointZero);
       tf2::fromMsg(odom2bf_msg, odom2bf_);
     }
-
     odom2bf_inverse = odom2bf_.inverse();
     start_ = false;
   }
+
   // Gets the tf from start 'odom' and actual 'base_footprint'
   if (tf_buffer_.canTransform("odom", "base_footprint", tf2::TimePointZero, &error)) {
     auto odom2bfa_msg = tf_buffer_.lookupTransform(
@@ -184,21 +182,16 @@ ActionServer::transform_callback()
     double x = bf2bfa.getOrigin().x();
     double y = bf2bfa.getOrigin().y();
 
-    // std::cerr << "command: \t" << goal_handle_->get_goal()->command << std::endl;
-
-    if (goal_handle_->get_goal()->command == 0) { // Si el comando es 0, el robot se mueve hacia adelante
+    if (goal_handle_->get_goal()->command == 0) {
       //  Calculate the distance between (0,0) and (x,y)
       actual_distance_ = sqrt(x * x + y * y);
 
-    } else if (goal_handle_->get_goal()->command == 1) { // Si el comando es 1, el robot gira
+    } else if (goal_handle_->get_goal()->command == 1) {
       //  Calculate the angle between (0,0) and (x,y)
       tf2::Matrix3x3 mat(bf2bfa.getRotation());
       mat.getRPY(roll_, pitch_, yaw_);
       actual_distance_ = yaw_;
     }
-
-    // std::cerr << "AD: \t" << actual_distance_ << std::endl;
-
   }
 }
 
