@@ -33,15 +33,25 @@ double y = bf2bfa.getOrigin().y();
 actual_distance_ = sqrt(x * x + y * y);
 ```
 
-Dependiendo de la distancia, la FSM estara en el estado FORWARD o STOP
+Dependiendo de la distancia y del cliente que mande la solicitud (forward manda un 0 y turn un 1), el robot se movera o girara la disntacia pedida
 ```cpp
+if (goal_handle_->get_goal()->command == 0) {
+   m_vel_.linear.x = 0.3;
+   m_vel_.angular.z = 0;
 
-```
-## Launcher y ejecución
-Para ejecutar estos nodos he usado un launcher en el que al cliente le paso como parametros la distancia.
-```cpp
+} else if (goal_handle_->get_goal()->command == 1) {
+   m_vel_.linear.x = 0;
+   m_vel_.angular.z = 0.3;
+}
+vel_->publish(m_vel_);
 ```
 
+Si mientras se esta ejecutando un comando el otro cliente hace una solicitud, automaticamente el servidor cancela al anterior cliente y procesa la solicitud nueva:
+```shell
+[ERROR] [1709039333.494944182] [action_forward_turn_action_client]: Goal was canceled
+```
+  
+## Ejecución
 Tambien se puede ejecutar escribiendo en una terminal el server
 ```shell
 ros2 run action_server_main
@@ -52,7 +62,8 @@ Y en otra terminal el cliente con la distancia deseada (action_client_forward_ma
 ros2 run action_client_forward_main '[distancia]'
 ```
 ## Video demostración
-  
+  [Grabación de pantalla desde 27-02-24 14:15:39.webm](https://github.com/Docencia-fmrico/p4-actionforwardturn-jmartinm2021/assets/92941332/1a4d8456-a222-418d-871f-7743a65d9fb2)
+
 ## Enunciado
 En esta práctica debes crear 2 paquetes:
 
