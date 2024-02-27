@@ -46,9 +46,7 @@ ActionServer::ActionServer()
     std::bind(&ActionServer::handle_goal, this, _1, _2),
     std::bind(&ActionServer::handle_cancel, this, _1),
     std::bind(&ActionServer::handle_accepted, this, _1));
-  
-  timer_pos_check_ = create_wall_timer(
-    50ms, std::bind(&ActionServer::transform_callback, this));
+
   vel_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
 }
 
@@ -63,8 +61,11 @@ ActionServer::handle_goal(
   const rclcpp_action::GoalUUID & uuid,
   std::shared_ptr<const GenerateInformation::Goal> goal)
 {
+  start_time_initialized_ = false;
   start_ = true;
-  RCLCPP_INFO(get_logger(), "Received goal with command %d and distance %f", goal->command, goal->distance);
+  once_ = true;
+  RCLCPP_INFO(
+    get_logger(), "Received goal with command %d and distance %f", goal->command, goal->distance);
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
@@ -81,32 +82,61 @@ ActionServer::handle_accepted(const std::shared_ptr<GoalHandleGenerateInformatio
 {
   RCLCPP_INFO(get_logger(), "Goal accepted by server");
   goal_handle_ = goal_handle;
+  current_times_ = 0;
+  timer_ = create_wall_timer(
+    334ms, std::bind(&ActionServer::execute, this));
 }
 
 void
 ActionServer::execute()
 {
-  if (current_times_ < 10 && !goal_handle_->is_canceling()) {
+  // RCLCPP_INFO(get_logger(), "EXECUTE");
+
+  if (!goal_handle_->is_canceling()) {
     auto feedback = std::make_shared<GenerateInformation::Feedback>();
 
-    double remaining_distance = goal_handle_->get_goal()->distance - actual_distance_;
+    transform_callback();
 
-    if (remaining_distance <= 0){
+    remaining_distance = goal_handle_->get_goal()->distance - actual_distance_;
+    // std::cerr << "Distnace: \t" << goal_handle_->get_goal()->distance << std::endl;
+    // std::cerr << "RD: \t" << remaining_distance << std::endl;
+
+    if (!start_time_initialized_) {
+      start_time_ = std::chrono::steady_clock::now();
+      start_time_initialized_ = true;
+    }
+
+    if (remaining_distance <= 0) {
       m_vel_.linear.x = 0;
       m_vel_.angular.z = 0;
       vel_->publish(m_vel_);
+
+      auto elapsed_time = std::chrono::steady_clock::now() - start_time_;
+      auto elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed_time).count();
+
+      if (once_) {
+        std::cerr << "Total time: \t" << elapsed_seconds << " seconds" << std::endl;
+        std::cerr << "Total distance: \t" << actual_distance_ << std::endl;
+        once_ = false;
+      }
+
     } else {
+      feedback->current_distance = actual_distance_;
+      goal_handle_->publish_feedback(feedback);
+      feedback->distance_remaining = remaining_distance;
+      goal_handle_->publish_feedback(feedback);
+
       if (goal_handle_->get_goal()->command == 0) { // Si el comando es 0, el robot se mueve hacia adelante
         m_vel_.linear.x = 0.3;
+        m_vel_.angular.z = 0;
 
       } else if (goal_handle_->get_goal()->command == 1) { // Si el comando es 1, el robot gira
+        m_vel_.linear.x = 0;
         m_vel_.angular.z = 0.3;
       }
       vel_->publish(m_vel_);
     }
 
-    feedback->distance_remaining = 10.0 - current_times_;
-    goal_handle_->publish_feedback(feedback);
   } else {
     auto result = std::make_shared<GenerateInformation::Result>();
 
@@ -114,7 +144,7 @@ ActionServer::execute()
       goal_handle_->canceled(result);
 
       RCLCPP_INFO(get_logger(), "Action Canceled");
-    } else if (current_times_ >= 10) {
+    } else if (remaining_distance <= 0) {
       goal_handle_->succeed(result);
       RCLCPP_INFO(get_logger(), "Navigation Succeeded");
     }
@@ -150,27 +180,25 @@ ActionServer::transform_callback()
     // Gets the tf from start 'base_footprint' and actual 'base_footprint'
     tf2::Transform bf2bfa = odom2bf_inverse * odom2bfa;
 
-    //std::cerr << "BF: \t" << odom2bf_.getOrigin().x() << " " << odom2bf_.getOrigin().y() <<
-      //std::endl;
-    //std::cerr << "BFa: \t" << odom2bfa.getOrigin().x() << " " << odom2bfa.getOrigin().y() <<
-      //std::endl;
-    //std::cerr << "TF: \t" << bf2bfa.getOrigin().x() << " " << bf2bfa.getOrigin().y() << std::endl;
-
     //  Extracts the x and y coordinates from the obtained transformation.
     double x = bf2bfa.getOrigin().x();
     double y = bf2bfa.getOrigin().y();
 
-    if (goal_handle_->get_goal()->command == 0) { // Si el comando es 0, el robot se mueve hacia adelante
-        //  Calculate the distance between (0,0) and (x,y)
-        actual_distance_ = sqrt(x * x + y * y);
+    // std::cerr << "command: \t" << goal_handle_->get_goal()->command << std::endl;
 
-      } else if (goal_handle_->get_goal()->command == 1) { // Si el comando es 1, el robot gira
-        //  Calculate the angle between (0,0) and (x,y)
-        tf2::Matrix3x3 mat(bf2bfa.getRotation());
-        mat.getRPY(roll_, pitch_, yaw_);
-        actual_distance_ = yaw_;
-      }
-  
+    if (goal_handle_->get_goal()->command == 0) { // Si el comando es 0, el robot se mueve hacia adelante
+      //  Calculate the distance between (0,0) and (x,y)
+      actual_distance_ = sqrt(x * x + y * y);
+
+    } else if (goal_handle_->get_goal()->command == 1) { // Si el comando es 1, el robot gira
+      //  Calculate the angle between (0,0) and (x,y)
+      tf2::Matrix3x3 mat(bf2bfa.getRotation());
+      mat.getRPY(roll_, pitch_, yaw_);
+      actual_distance_ = yaw_;
+    }
+
+    // std::cerr << "AD: \t" << actual_distance_ << std::endl;
+
   }
 }
 

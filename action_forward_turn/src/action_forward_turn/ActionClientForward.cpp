@@ -52,7 +52,8 @@ ActionClientForward::send_request(GenerateInformation::Goal goal)
 }
 
 void
-ActionClientForward::goal_response_callback(const GoalHandleGenerateInformation::SharedPtr & goal_handle)
+ActionClientForward::goal_response_callback(
+  const GoalHandleGenerateInformation::SharedPtr & goal_handle)
 {
   if (!goal_handle) {
     RCLCPP_ERROR(get_logger(), "Goal was rejected by server");
@@ -66,6 +67,8 @@ ActionClientForward::feedback_callback(
   GoalHandleGenerateInformation::SharedPtr,
   const std::shared_ptr<const GenerateInformation::Feedback> feedback)
 {
+  RCLCPP_INFO(
+    get_logger(), "Feedback received: distance moved = %f", feedback->current_distance);
   RCLCPP_INFO(
     get_logger(), "Feedback received: distance to goal = %f", feedback->distance_remaining);
 }

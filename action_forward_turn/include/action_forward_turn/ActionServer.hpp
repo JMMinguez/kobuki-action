@@ -53,14 +53,18 @@ private:
 
   double actual_distance_;
   bool start_;
+  bool once_;
+  double remaining_distance;
 
   double roll_, pitch_, yaw_;
 
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr vel_;
   geometry_msgs::msg::Twist m_vel_;
+
+  bool start_time_initialized_;
+  std::chrono::steady_clock::time_point start_time_;
 };
 
 }  // namespace action_forward_turn
 
 #endif  // ACTION_FORWARD_TURN__ACTION_SERVER_HPP_
-
