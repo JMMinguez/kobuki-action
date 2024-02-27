@@ -12,6 +12,9 @@ Esta práctica hace uso de 2 paquetes:
 ## Descripcion y procedimiento
 En esta práctica, he utilizado como base el paquete [**ASR_2024**](https://github.com/Docencia-fmrico/ASR_2024) proporcionado por [fmrico](https://github.com/fmrico). 
 
+La idea inicial era usar una FSM tal que:  
+![Captura desde 2024-02-27 14-35-12](https://github.com/Docencia-fmrico/2024-p4-serviceforward-jmartinm2021/assets/92941332/85b9efb4-82d2-4c6c-9537-0593131c04b5)  
+  
 En cuanto el servidor recibe el mensaje del cliente con una distancia, el servidor toma la posicion del robot.
 ```cpp
 if (tf_buffer_.canTransform("odom", "base_footprint", tf2::TimePointZero, &error)) {
@@ -62,7 +65,7 @@ Y en otra terminal el cliente con la distancia deseada (action_client_forward_ma
 ros2 run action_client_forward_main '[distancia]'
 ```
 ## Video demostración
-  [Grabación de pantalla desde 27-02-24 14:15:39.webm](https://github.com/Docencia-fmrico/p4-actionforwardturn-jmartinm2021/assets/92941332/1a4d8456-a222-418d-871f-7743a65d9fb2)
+[Grabación de pantalla desde 27-02-24 14:15:39.webm](https://github.com/Docencia-fmrico/p4-actionforwardturn-jmartinm2021/assets/92941332/1a4d8456-a222-418d-871f-7743a65d9fb2)
 
 ## Enunciado
 En esta práctica debes crear 2 paquetes:
