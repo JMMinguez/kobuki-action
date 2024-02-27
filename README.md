@@ -6,7 +6,7 @@ El objetivo de la practica es conseguir que el [Kobuki](https://robots.ros.org/k
 
 ## Creación de paquetes
 Esta práctica hace uso de 2 paquetes:
-- En el paquete [action_forward_turn_interfaces]([https://github.com/Docencia-fmrico/2024-p4-serviceforward-jmartinm2021/tree/main/service_forward_interfaces](https://github.com/Docencia-fmrico/p4-actionforwardturn-jmartinm2021/tree/main/action_forward_turn_interfaces) están definidos los servicios, mensajes y acciones.
+- En el paquete [action_forward_turn_interfaces](https://github.com/Docencia-fmrico/p4-actionforwardturn-jmartinm2021/tree/main/action_forward_turn_interfaces) están definidos los servicios, mensajes y acciones.
 - El paquete [action_forward_turn](https://github.com/Docencia-fmrico/p4-actionforwardturn-jmartinm2021/tree/main/action_forward_turn_interfaces) contiene los nodos de los clientes y servidor.
 
 ## Descripcion y procedimiento
